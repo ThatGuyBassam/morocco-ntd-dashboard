@@ -3,6 +3,11 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+data/Morocco-Regions.geojson
+__pycache__/
+*.pyc
+.streamlit/
+.env
 # C extensions
 *.so
 
