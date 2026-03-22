@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morocco NTD Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0d0f14;--bg2:#0a0c10;--bg3:#111420;--bg4:#0e1118;
+  --border:#1e2438;--border2:#2a3050;--border-accent:#4a6cf7;
+  --text:#c8cfe0;--text2:#8090a8;--text3:#3a4868;--text-bright:#e8eeff;
+  --accent:#4a6cf7;--accent2:#7090e8;
+  --green:#4a9e6a;--red:#c06060;--amber:#8a6020;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+
+/* ── Layout ── */
+.app{display:grid;grid-template-rows:auto auto 1fr auto;min-height:100vh;}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+.topbar-title{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--text-bright);}
+.topbar-sub{font-size:12px;color:var(--text3);margin-top:2px;}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.lang-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:5px 12px;color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer;transition:border-color .15s;}
+.lang-btn:hover,.lang-btn.active{border-color:var(--accent);color:var(--accent2);}
+.disease-bar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;display:flex;overflow-x:auto;scrollbar-width:none;}
+.disease-bar::-webkit-scrollbar{display:none;}
+.dtab{padding:10px 16px;font-size:12px;font-weight:500;color:var(--text3);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s;font-family:var(--sans);}
+.dtab:hover{color:var(--text2);}
+.dtab.active{color:var(--accent2);border-bottom-color:var(--accent);}
+.main{display:grid;grid-template-columns:1fr 300px;gap:0;min-height:0;}
+@media(max-width:768px){.main{grid-template-columns:1fr;}.side{order:-1;}}
+
+/* ── Map ── */
+.map-wrap{position:relative;background:var(--bg4);}
+#map{height:520px;width:100%;}
+@media(max-width:768px){#map{height:340px;}}
+.map-label{position:absolute;top:10px;left:10px;z-index:999;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;background:rgba(13,15,20,.85);padding:5px 10px;border-radius:6px;border:1px solid var(--border);}
+
+/* ── Side panel ── */
+.side{background:var(--bg2);border-left:1px solid var(--border);padding:16px;overflow-y:auto;max-height:calc(100vh - 200px);}
+.section-label{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.12em;color:var(--text3);text-transform:uppercase;margin:14px 0 6px;}
+.stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:5px 0;}
+.stat-val{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--text);}
+.stat-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:3px;}
+.stat-sub{font-size:11px;color:#506080;margin-top:3px;}
+.trend-up{color:var(--red);}
+.trend-down{color:var(--green);}
+.region-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #1a1e2e;font-size:12px;color:var(--text2);}
+.region-row .rname{color:#a0b0c8;}
+.region-row .rval{font-family:var(--mono);color:var(--accent2);}
+.gene-chip{display:inline-block;background:#141c38;color:var(--accent2);border:1px solid #2a3870;border-radius:20px;padding:2px 9px;margin:2px;font-size:11px;font-weight:600;font-family:var(--mono);}
+.badge-confirmed{display:inline-block;background:#0a1408;color:var(--green);border:1px solid #1e3a18;border-radius:4px;padding:2px 7px;font-size:10px;font-family:var(--mono);}
+.badge-proportional,.badge-partial{display:inline-block;background:#1a1408;color:#c09060;border:1px solid #3a2800;border-radius:4px;padding:2px 7px;font-size:10px;font-family:var(--mono);}
+.badge-nodata{display:inline-block;background:#1a1220;color:#8070a8;border:1px solid #3a2860;border-radius:4px;padding:2px 7px;font-size:10px;font-family:var(--mono);}
+.scouter-btn{display:block;background:#0e1525;border:1px solid var(--accent);border-radius:8px;padding:10px 14px;color:var(--accent);font-size:12px;font-weight:600;text-decoration:none;text-align:center;margin-top:10px;transition:background .15s;}
+.scouter-btn:hover{background:#141c38;}
+.divider{border:none;border-top:1px solid #1a1e2e;margin:10px 0;}
+.source-note{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:8px;line-height:1.7;}
+.warning-note{background:#1a1408;border:1px solid #3a2800;border-radius:6px;padding:8px 12px;font-size:10px;color:var(--amber);margin-top:6px;line-height:1.6;}
+
+/* ── Region detail ── */
+.detail-panel{background:var(--bg);border-top:3px solid var(--accent);padding:20px 24px;display:none;}
+.detail-panel.visible{display:block;}
+.detail-title{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text-bright);margin-bottom:4px;}
+.detail-pop{font-size:12px;color:var(--text3);margin-bottom:14px;}
+.detail-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;}
+@media(max-width:600px){.detail-grid{grid-template-columns:repeat(2,1fr);}}
+.detail-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;}
+.detail-icon{font-size:16px;margin-bottom:3px;}
+.detail-dlbl{font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;}
+.detail-dval{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--text);}
+.detail-dinc{font-size:10px;color:#506080;}
+.detail-dconf{font-size:9px;margin-top:2px;font-family:var(--mono);}
+
+/* ── No data view ── */
+.nodata-view{display:flex;flex-direction:column;align-items:center;justify-content:center;height:520px;background:var(--bg4);text-align:center;padding:40px;}
+.nodata-num{font-family:var(--mono);font-size:64px;font-weight:600;color:var(--text);}
+.nodata-lbl{font-size:14px;color:#506080;margin-top:6px;}
+.nodata-note{font-size:12px;color:var(--text3);margin-top:16px;max-width:400px;line-height:1.6;}
+
+/* ── Legend ── */
+.legend{background:rgba(13,15,20,.9);border:1px solid var(--border);border-radius:6px;padding:8px 12px;}
+.legend-title{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;}
+.legend-scale{display:flex;gap:2px;align-items:center;}
+.legend-bar{height:8px;border-radius:2px;}
+.legend-labels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:3px;}
+
+/* ── Footer ── */
+.footer{background:var(--bg2);border-top:1px solid var(--border);padding:12px 24px;font-size:11px;color:var(--text3);font-family:var(--mono);display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;}
+
+/* ── Leaflet overrides ── */
+.leaflet-container{background:#0a0c10!important;}
+.leaflet-control-zoom a{background:var(--bg3)!important;color:var(--text2)!important;border-color:var(--border)!important;}
+.leaflet-control-attribution{background:rgba(10,12,16,.8)!important;color:var(--text3)!important;font-size:9px!important;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div>
+    <div class="topbar-title">🗺 <span data-t="title">Morocco NTD Dashboard</span></div>
+    <div class="topbar-sub" data-t="subtitle">Neglected tropical diseases · 12 administrative regions · Annuaire Statistique 2025 / RGPH 2024</div>
+  </div>
+  <div class="topbar-right">
+    <button class="lang-btn active" onclick="setLang('en')">🇬🇧 EN</button>
+    <button class="lang-btn" onclick="setLang('fr')">🇫🇷 FR</button>
+    <a class="scouter-btn" href="https://github.com/Thatguybassam/pygeno-scouter" target="_blank" style="padding:6px 12px;margin:0;font-size:11px;">🧬 pyGeno Scouter</a>
+  </div>
+</div>
+
+<!-- DISEASE TABS -->
+<div class="disease-bar" id="disease-bar"></div>
+
+<!-- MAIN -->
+<div class="main">
+  <div style="display:flex;flex-direction:column;">
+    <div class="map-wrap" id="map-wrap">
+      <div class="map-label" id="map-label">Cases / 100,000</div>
+      <div id="map"></div>
+      <div class="nodata-view" id="nodata-view" style="display:none;">
+        <div class="nodata-num" id="nodata-num"></div>
+        <div class="nodata-lbl" id="nodata-lbl"></div>
+        <div class="nodata-note" id="nodata-note"></div>
+      </div>
+    </div>
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-title" id="detail-title"></div>
+      <div class="detail-pop" id="detail-pop"></div>
+      <div class="section-label" data-t="all_diseases">All diseases</div>
+      <div class="detail-grid" id="detail-grid"></div>
+      <div class="divider"></div>
+      <div id="detail-physician"></div>
+    </div>
+  </div>
+
+  <!-- SIDE PANEL -->
+  <div class="side">
+    <div class="section-label" data-t="national_total">National total</div>
+    <div class="stat-card" id="stat-national">
+      <div class="stat-lbl" id="stat-year"></div>
+      <div class="stat-val" id="stat-val"></div>
+      <div class="stat-sub" id="stat-unit"></div>
+    </div>
+    <div class="stat-card" id="stat-trend">
+      <div class="stat-lbl" data-t="trend">Trend</div>
+      <div id="trend-content" style="font-size:12px;color:#8090a8;line-height:2;"></div>
+    </div>
+    <div class="section-label" data-t="top_regions">Top regions</div>
+    <div id="top-regions-list" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;"></div>
+    <div id="confidence-box" style="margin-top:8px;"></div>
+    <div class="divider"></div>
+    <div class="section-label">🧬 <span data-t="susc_genes">Susceptibility genes</span></div>
+    <div id="gene-chips" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:12px 14px;"></div>
+    <a class="scouter-btn" href="https://github.com/Thatguybassam/pygeno-scouter" target="_blank" data-t-href="scouter_btn">🧬 Explore in pyGeno Scouter →</a>
+    <div class="divider"></div>
+    <div class="source-note" id="source-note"></div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <span>Sources: Annuaire Statistique 2025 (HCP) · Santé en Chiffres 2023 (MSPS) · RGPH 2024 (HCP) · WHO EMRO / MSPS 2024</span>
+  <span>Population: 36,828,330 · 12 régions (réforme 2015) · Mars 2026</span>
+</div>
+
+</div><!-- end .app -->
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════
+
+const POPULATION = {1:4030222,2:2294665,3:4467911,4:5132639,5:2525801,6:7688967,7:4892393,8:1655623,9:3020431,10:448685,11:451028,12:219965};
+
+const REGION_NAMES = {
+  en:{1:"Tanger-Tétouan-Al Hoceïma",2:"L'Oriental",3:"Fès-Meknès",4:"Rabat-Salé-Kénitra",5:"Béni Mellal-Khénifra",6:"Casablanca-Settat",7:"Marrakech-Safi",8:"Drâa-Tafilalet",9:"Souss-Massa",10:"Guelmim-Oued Noun",11:"Laâyoune-Sakia El Hamra",12:"Dakhla-Oued Ed-Dahab"},
+  fr:{1:"Tanger-Tétouan-Al Hoceïma",2:"L'Oriental",3:"Fès-Meknès",4:"Rabat-Salé-Kénitra",5:"Béni Mellal-Khénifra",6:"Casablanca-Settat",7:"Marrakech-Safi",8:"Drâa-Tafilalet",9:"Souss-Massa",10:"Guelmim-Oued Noun",11:"Laâyoune-Sakia El Hamra",12:"Dakhla-Oued Ed-Dahab"}
+};
+
+const PHYSICIAN_DENSITY = {1:1.70,2:2.65,3:1.85,4:2.57,5:1.40,6:2.06,7:1.75,8:1.65,9:1.50,10:2.78,11:3.29,12:2.00};
+const PHYSICIAN_CONFIRMED = new Set([2,4,5,6,8,9,10,11]);
+
+const DISEASES = {
+  cutaneous_leish:{
+    label:{en:"Cutaneous Leishmaniasis",fr:"Leishmaniose Cutanée"},
+    icon:"🦟", unit:{en:"cases",fr:"cas"}, year:2023, national:2359,
+    confidence:"CONFIRMED",
+    cases:{1:92,2:83,3:318,4:47,5:392,6:135,7:722,8:434,9:135,10:1,11:0,12:0},
+    trend:{2021:3169,2022:2327,2023:2359},
+    hotspots:["Chichaoua","Essaouira","Zagora","Azilal","Ouezzane"],
+    source:"Annuaire Statistique 2025, HCP — Tableau 12-27",
+    note:{en:"Combines ZCL (L. major, pre-Saharan) and ACL (L. tropica, Atlas/urban zones). Regional figures verified against national total.",fr:"Combine ZCL (L. major, pré-saharien) et ACL (L. tropica, zones Atlas/urbaines)."},
+    genes:["SLC11A1","IL4","IFNG","TNF"],
+    geneNote:{en:"SLC11A1 variants associated with Leishmania resistance in North African populations.",fr:"Les variants SLC11A1 sont associés à la résistance à Leishmania dans les populations nord-africaines."}
+  },
+  visceral_leish:{
+    label:{en:"Visceral Leishmaniasis",fr:"Leishmaniose Viscérale"},
+    icon:"🔬", unit:{en:"cases",fr:"cas"}, year:2023, national:73,
+    confidence:"NO_REGIONAL_DATA",
+    cases:{1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0},
+    trend:{2022:null,2023:73},
+    hotspots:["Chefchaouen","Tanger-Assilah","Fès","Meknès"],
+    source:"Santé en Chiffres 2023, Tab 1.5 (national total only)",
+    note:{en:"Regional breakdown not published in any official source. Caused by L. infantum — primarily affects children under 5.",fr:"Répartition régionale non publiée dans aucune source officielle. Causée par L. infantum — affecte principalement les enfants de moins de 5 ans."},
+    genes:["SLC11A1","IL10","TNF","VDR"],
+    geneNote:{en:"IL10 variants modulate immunosuppression. VDR polymorphisms affect innate immune activation.",fr:"Les variants IL10 modulent l'immunosuppression. Les polymorphismes VDR affectent l'activation immunitaire innée."}
+  },
+  rabies:{
+    label:{en:"Human Rabies",fr:"Rage Humaine"},
+    icon:"🐕", unit:{en:"deaths",fr:"décès"}, year:2024, national:33,
+    confidence:"PROPORTIONAL",
+    cases:{1:3,2:1,3:4,4:5,5:1,6:5,7:7,8:2,9:5,10:0,11:0,12:0},
+    trend:{2022:20,2023:19,2024:33},
+    hotspots:["Casablanca","Rabat","Marrakech","Agadir"],
+    source:"Santé en Chiffres 2023 + MSPS/WHO EMRO 2024. Regional: DELM cumulative 2013–2023 (WOAH Africa 2025).",
+    note:{en:"33 deaths in 2024 (+65% vs historical avg). Map shows proportional distribution from DELM 10-year cumulative data — not confirmed annual figures.",fr:"33 décès en 2024 (+65% vs moyenne historique). La carte montre une distribution proportionnelle des données cumulatives DELM 2013–2023."},
+    genes:["TLR3","TLR4","IFNAR1"],
+    geneNote:{en:"TLR3 variants affect innate immune response to rhabdovirus.",fr:"Les variants TLR3 affectent la réponse immunitaire innée au rhabdovirus."}
+  },
+  malaria:{
+    label:{en:"Imported Malaria",fr:"Paludisme Importé"},
+    icon:"🌍", unit:{en:"cases",fr:"cas"}, year:2023, national:622,
+    confidence:"PARTIAL",
+    cases:{1:79,2:45,3:40,4:68,5:17,6:55,7:125,8:11,9:114,10:11,11:17,12:40},
+    trend:{2021:542,2022:283,2023:622},
+    hotspots:["Casablanca","Marrakech","Agadir","Tangier"],
+    source:"National: Santé en Chiffres 2023. Casablanca (55): Rapport Régional ODD 2025. Remainder: proportional.",
+    note:{en:"All cases imported — Morocco malaria-free since 2010 (WHO). Casablanca (55) is the only confirmed regional figure.",fr:"Tous les cas importés — Maroc certifié sans paludisme depuis 2010 (OMS). Casablanca (55) est la seule figure régionale confirmée."},
+    genes:["HBB","G6PD","DARC","CR1"],
+    geneNote:{en:"G6PD deficiency and HBB variants (sickle cell trait) confer partial protection against P. falciparum.",fr:"Le déficit en G6PD et les variants HBB confèrent une protection partielle contre P. falciparum."}
+  },
+  tuberculosis:{
+    label:{en:"Tuberculosis",fr:"Tuberculose"},
+    icon:"🫁", unit:{en:"cases",fr:"cas"}, year:2023, national:32429,
+    confidence:"CONFIRMED",
+    cases:{1:4935,2:1437,3:3995,4:6298,5:1554,6:7803,7:2774,8:513,9:1847,10:304,11:201,12:143},
+    trend:{2022:30503,2023:32429},
+    hotspots:["Casablanca","Rabat","Tétouan","Fès"],
+    source:"Annuaire Statistique 2025, HCP — Tableau 12-27",
+    note:{en:"625 additional cases listed as 'Autres' (unspecified region) in source table.",fr:"625 cas supplémentaires listés comme 'Autres' (région non précisée) dans le tableau source."},
+    genes:["SLC11A1","VDR","IL12B","IFNG"],
+    geneNote:{en:"SLC11A1 and VDR are major TB susceptibility loci with high-frequency alleles in Moroccan populations.",fr:"SLC11A1 et VDR sont des loci majeurs de susceptibilité à la TB avec des allèles à haute fréquence au Maroc."}
+  }
+};
+
+const TRANSLATIONS = {
+  en:{title:"Morocco NTD Dashboard",subtitle:"Neglected tropical diseases · 12 administrative regions · Annuaire Statistique 2025 / RGPH 2024",national_total:"National total",trend:"Trend",top_regions:"Top regions by incidence",all_diseases:"All diseases",susc_genes:"Susceptibility genes",scouter_btn:"Explore in pyGeno Scouter →",per_100k:"per 100,000",confirmed_label:"CONFIRMED — official table",proportional_label:"PROPORTIONAL — derived from DELM 2013–2023",partial_label:"PARTIAL — Casablanca confirmed (55), remainder proportional",nodata_label:"NO REGIONAL DATA — national total only",physician:"Physician density",who_thresh:"WHO threshold: 2.5/1,000",above_who:"Above WHO threshold",below_who:"Below WHO threshold",click_region:"Click a region on the map for details",source:"Source"},
+  fr:{title:"Tableau de Bord MTN — Maroc",subtitle:"Maladies tropicales négligées · 12 régions administratives · Annuaire Statistique 2025 / RGPH 2024",national_total:"Total national",trend:"Tendance",top_regions:"Régions les plus touchées",all_diseases:"Toutes les maladies",susc_genes:"Gènes de susceptibilité",scouter_btn:"Explorer dans pyGeno Scouter →",per_100k:"pour 100 000",confirmed_label:"CONFIRMÉ — tableau officiel",proportional_label:"PROPORTIONNEL — dérivé DELM 2013–2023",partial_label:"PARTIEL — Casablanca confirmé (55), reste proportionnel",nodata_label:"PAS DE DONNÉES RÉGIONALES — total national uniquement",physician:"Densité médicale",who_thresh:"Seuil OMS : 2,5/1 000",above_who:"Au-dessus du seuil OMS",below_who:"En dessous du seuil OMS",click_region:"Cliquez sur une région pour les détails",source:"Source"}
+};
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let lang = 'en';
+let selectedDisease = 'cutaneous_leish';
+let selectedRegion = null;
+let map = null;
+let geojsonLayer = null;
+let geojsonData = null;
+
+// ═══════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════
+const T = key => TRANSLATIONS[lang][key] || key;
+const rname = idx => REGION_NAMES[lang][idx] || REGION_NAMES.en[idx];
+
+function incPer100k(cases){
+  const out={};
+  for(let i=1;i<=12;i++) out[i]=cases[i]?Math.round(cases[i]/POPULATION[i]*100000*10)/10:0;
+  return out;
+}
+
+function colorYlOrRd(val,vmin,vmax){
+  if(!val||vmax===vmin) return '#1a1e2e';
+  const r=(val-vmin)/(vmax-vmin);
+  const stops=[[0,[255,255,204]],[.25,[254,217,118]],[.5,[253,141,60]],[.75,[240,59,32]],[1,[189,0,38]]];
+  for(let i=0;i<stops.length-1;i++){
+    const[t0,c0]=stops[i],[t1,c1]=stops[i+1];
+    if(r>=t0&&r<=t1){
+      const f=(r-t0)/(t1-t0);
+      return '#'+[0,1,2].map(j=>Math.round(c0[j]+f*(c1[j]-c0[j])).toString(16).padStart(2,'0')).join('');
+    }
+  }
+  return '#bd0026';
+}
+
+function topRegions(incid,n=5){
+  return Object.entries(incid).sort((a,b)=>b[1]-a[1]).slice(0,n).map(([i,v])=>({name:rname(+i),val:v}));
+}
+
+// ═══════════════════════════════════════════════════════
+// LANG
+// ═══════════════════════════════════════════════════════
+function setLang(l){
+  lang=l;
+  document.querySelectorAll('.lang-btn').forEach(b=>b.classList.toggle('active',b.textContent.includes(l.toUpperCase())));
+  document.querySelectorAll('[data-t]').forEach(el=>{ const k=el.getAttribute('data-t'); if(T(k)) el.textContent=T(k); });
+  renderSide();
+  if(selectedRegion) renderDetail(selectedRegion);
+  renderDiseaseTabs();
+  renderMap();
+}
+
+// ═══════════════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════════════
+function initMap(){
+  map=L.map('map',{zoomControl:true,attributionControl:true}).setView([29.5,-7.5],5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB',maxZoom:18}).addTo(map);
+}
+
+function renderMap(){
+  const d=DISEASES[selectedDisease];
+  const mapEl=document.getElementById('map');
+  const nodataEl=document.getElementById('nodata-view');
+  const labelEl=document.getElementById('map-label');
+
+  if(d.confidence==='NO_REGIONAL_DATA'){
+    mapEl.style.display='none';
+    nodataEl.style.display='flex';
+    document.getElementById('nodata-num').textContent=d.national.toLocaleString();
+    document.getElementById('nodata-lbl').textContent=`${T('national_total')} — ${d.year}`;
+    document.getElementById('nodata-note').textContent=d.note[lang];
+    return;
+  }
+
+  mapEl.style.display='block';
+  nodataEl.style.display='none';
+  labelEl.textContent=`${d.label[lang]} · ${T('per_100k')} · ${d.year}`;
+
+  if(geojsonLayer){ geojsonLayer.remove(); geojsonLayer=null; }
+  if(!geojsonData) return;
+
+  const incid=incPer100k(d.cases);
+  const vals=Object.values(incid).filter(v=>v>0);
+  const vmin=vals.length?Math.min(...vals):0;
+  const vmax=vals.length?Math.max(...vals):1;
+
+  geojsonLayer=L.geoJSON(geojsonData,{
+    style: feat=>{
+      const idx=feat.properties.Indice;
+      return{fillColor:colorYlOrRd(incid[idx],vmin,vmax),fillOpacity:.82,color:'#c8cfe0',weight:1.2};
+    },
+    onEachFeature:(feat,layer)=>{
+      const idx=feat.properties.Indice;
+      const val=incid[idx];
+      const pop=POPULATION[idx].toLocaleString();
+      layer.bindTooltip(`<div style="font-family:IBM Plex Mono,monospace;font-size:12px;background:#0e1220;color:#c8cfe0;border:1px solid #4a6cf7;border-radius:6px;padding:10px 14px;"><b>${rname(idx)}</b><br>${val} ${T('per_100k')}<br>Pop: ${pop}</div>`,{sticky:true,opacity:1});
+      layer.on('mouseover',function(){this.setStyle({fillColor:'#4a6cf7',fillOpacity:.5,color:'#ffffff',weight:2.5});});
+      layer.on('mouseout',function(){geojsonLayer.resetStyle(this);});
+      layer.on('click',function(){
+        selectedRegion=idx;
+        renderDetail(idx);
+        geojsonLayer.resetStyle();
+        this.setStyle({fillColor:'#4a6cf7',fillOpacity:.4,color:'#ffffff',weight:2.5});
+      });
+    }
+  }).addTo(map);
+}
+
+// ═══════════════════════════════════════════════════════
+// DISEASE TABS
+// ═══════════════════════════════════════════════════════
+function renderDiseaseTabs(){
+  const bar=document.getElementById('disease-bar');
+  bar.innerHTML='';
+  Object.entries(DISEASES).forEach(([key,d])=>{
+    const tab=document.createElement('div');
+    tab.className='dtab'+(key===selectedDisease?' active':'');
+    tab.textContent=`${d.icon} ${d.label[lang]} · ${d.national.toLocaleString()} ${d.unit[lang]}`;
+    tab.onclick=()=>{
+      selectedDisease=key;
+      selectedRegion=null;
+      document.getElementById('detail-panel').classList.remove('visible');
+      document.querySelectorAll('.dtab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      renderSide();
+      renderMap();
+    };
+    bar.appendChild(tab);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// SIDE PANEL
+// ═══════════════════════════════════════════════════════
+function renderSide(){
+  const d=DISEASES[selectedDisease];
+  const incid=incPer100k(d.cases);
+
+  // National stat
+  document.getElementById('stat-year').textContent=`${T('national_total')} — ${d.year}`;
+  document.getElementById('stat-val').textContent=d.national.toLocaleString();
+  document.getElementById('stat-unit').textContent=d.unit[lang];
+
+  // Trend
+  const years=Object.keys(d.trend).filter(y=>d.trend[y]!==null).sort();
+  let trendHtml='';
+  if(years.length>=2){
+    const prev=d.trend[years[years.length-2]],curr=d.trend[years[years.length-1]];
+    const pct=Math.round(Math.abs((curr-prev)/prev)*100);
+    const up=curr>prev;
+    const arrow=up?'▲':'▼';
+    const cls=up?'trend-up':'trend-down';
+    trendHtml=`<span class="${cls}">${arrow} ${pct}% vs ${years[years.length-2]}</span><br><span style="color:var(--text3);font-size:11px;">${years.map(y=>d.trend[y].toLocaleString()).join(' → ')}</span>`;
+  }
+  document.getElementById('trend-content').innerHTML=trendHtml;
+
+  // Top regions
+  const top=topRegions(incid);
+  document.getElementById('top-regions-list').innerHTML=
+    top.map(r=>`<div class="region-row"><span class="rname">${r.name}</span><span class="rval">${r.val}</span></div>`).join('')+
+    `<div style="font-size:10px;color:var(--text3);margin-top:6px;font-family:var(--mono);">${T('per_100k')}</div>`;
+
+  // Confidence
+  const confMap={
+    CONFIRMED:`<span class="badge-confirmed">✓ ${T('confirmed_label')}</span>`,
+    PROPORTIONAL:`<span class="badge-proportional">~ ${T('proportional_label')}</span>`,
+    PARTIAL:`<span class="badge-partial">~ ${T('partial_label')}</span>`,
+    NO_REGIONAL_DATA:`<span class="badge-nodata">⚠ ${T('nodata_label')}</span>`
+  };
+  document.getElementById('confidence-box').innerHTML=
+    `${confMap[d.confidence]||''}<div class="warning-note" style="margin-top:6px;">${d.note[lang]}</div>`;
+
+  // Genes
+  document.getElementById('gene-chips').innerHTML=
+    d.genes.map(g=>`<span class="gene-chip">${g}</span>`).join(' ')+
+    `<div style="font-size:11px;color:#506080;margin-top:8px;line-height:1.6;">${d.geneNote[lang]}</div>`;
+
+  // Source
+  document.getElementById('source-note').innerHTML=`${T('source')}: ${d.source}`;
+}
+
+// ═══════════════════════════════════════════════════════
+// REGION DETAIL
+// ═══════════════════════════════════════════════════════
+function renderDetail(idx){
+  const panel=document.getElementById('detail-panel');
+  panel.classList.add('visible');
+  document.getElementById('detail-title').textContent=rname(idx);
+  document.getElementById('detail-pop').textContent=`Population (RGPH 2024): ${POPULATION[idx].toLocaleString()}`;
+
+  // All diseases grid
+  const grid=document.getElementById('detail-grid');
+  grid.innerHTML=Object.entries(DISEASES).map(([key,d])=>{
+    const raw=d.cases[idx]||0;
+    const inc=Math.round(raw/POPULATION[idx]*100000*10)/10;
+    const confColor={CONFIRMED:'var(--green)',PROPORTIONAL:'#c09060',PARTIAL:'#c09060',NO_REGIONAL_DATA:'#8070a8'}[d.confidence];
+    return `<div class="detail-card">
+      <div class="detail-icon">${d.icon}</div>
+      <div class="detail-dlbl">${d.label[lang].split(' ')[0]}</div>
+      <div class="detail-dval">${raw.toLocaleString()}</div>
+      <div class="detail-dinc">${inc} ${T('per_100k')}</div>
+      <div class="detail-dconf" style="color:${confColor};">${d.confidence}</div>
+    </div>`;
+  }).join('');
+
+  // Physician density
+  const dens=PHYSICIAN_DENSITY[idx];
+  const thresh=2.5;
+  const above=dens>=thresh;
+  const conf=PHYSICIAN_CONFIRMED.has(idx)?'✓ confirmed':'~ estimated';
+  const sc=above?'var(--green)':'var(--red)';
+  const stxt=above?T('above_who'):T('below_who');
+  document.getElementById('detail-physician').innerHTML=
+    `<div class="stat-card" style="display:inline-block;min-width:200px;">
+      <div class="stat-lbl">${T('physician')}</div>
+      <div class="stat-val">${dens}</div>
+      <div class="stat-sub" style="color:${sc};">${stxt}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px;font-family:var(--mono);">${T('who_thresh')} · ${conf}</div>
+    </div>`;
+
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  initMap();
+  renderDiseaseTabs();
+  renderSide();
+
+  // Load GeoJSON from Salah-Zkara repo via raw GitHub
+  fetch('https://raw.githubusercontent.com/Salah-Zkara/Morocco-GeoJson/master/Morocco-Regions.geojson')
+    .then(r=>{if(!r.ok)throw new Error('GeoJSON load failed');return r.json();})
+    .then(data=>{
+      geojsonData=data;
+      renderMap();
+    })
+    .catch(err=>{
+      console.error('GeoJSON failed:',err);
+      document.getElementById('map-label').textContent='Map unavailable — check internet connection';
+    });
+
+  // Apply translations
+  document.querySelectorAll('[data-t]').forEach(el=>{
+    const k=el.getAttribute('data-t');
+    if(T(k)) el.textContent=T(k);
+  });
+});
+</script>
+</body>
+</html>
