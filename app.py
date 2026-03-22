@@ -450,13 +450,15 @@ def render_gene_explorer(genes: list, disease_label: str):
         unsafe_allow_html=True
     )
 
-    # Gene selector
+    # Gene selector — key includes disease_label to avoid duplicate key when
+    # render_gene_explorer is called from both inline explorer and Gene Explorer tab
+    safe_key = disease_label.lower().replace(" ", "_").replace("/", "_")
     selected = st.radio(
         "Select gene",
         genes,
         horizontal=True,
         label_visibility="collapsed",
-        key="gene_radio",
+        key=f"gene_radio_{safe_key}",
     )
     if selected != st.session_state.selected_gene:
         st.session_state.selected_gene = selected
@@ -1054,3 +1056,4 @@ with gene_tab:
     )
 
     render_gene_explorer(active_genes, active_label)
+
